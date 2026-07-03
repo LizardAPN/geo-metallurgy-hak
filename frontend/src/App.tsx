@@ -53,8 +53,7 @@ export default function App() {
 
   const graphNodes = currentResponse?.graph_subset.nodes ?? previewNodes
   const graphEdges = currentResponse?.graph_subset.edges ?? previewEdges
-  const citedNodeIds =
-    currentResponse?.graph_subset.nodes.map((n) => n.id) ?? []
+  const citedNodeIds = currentResponse?.citations.map((c) => c.doc_id) ?? []
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
