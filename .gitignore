@@ -3,8 +3,21 @@
 .venv/
 venv/
 
-# Data corpus (not committed)
+# Data corpus (NDA — not committed)
 data/raw/
+data/corpus/
+data/incoming/
+data/processed/
+data/failed/
+data/archive/
+data/output_md/
+data/docker-compose.yml
+data/Dockerfile.docling
+data/nginx/
+data/run_ocr_folder.py
+data/README.md
+data/pdfs/
+data/test_run/
 
 # Python
 __pycache__/
