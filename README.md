@@ -1,5 +1,40 @@
 # Научный клубок
 
+## Document Normalization Layer
+
+Положите PDF или DOCX-файлы в `data/incoming/`.
+Запустите:
+
+```bash
+python scripts/process_incoming.py
+```
+
+После обработки для каждого документа появится папка:
+
+```
+data/processed/{doc_id}/
+  source.pdf / source.docx
+  document.md
+  metadata.json
+  page_map.json        # только для PDF
+  structure_map.json   # только для DOCX
+  parse_log.json
+```
+
+Повторная загрузка того же файла не создаёт дубликат — определение по SHA-256.
+
+### Зависимости модуля
+
+```bash
+pip install -r requirements.txt
+```
+
+### Что пока не реализовано
+
+OCR, chunking, embeddings, entity extraction, semantic search, LLM-ответы.
+
+---
+
 Поисково-аналитическая система на базе графа знаний для R&D-документов горно-металлургической отрасли. Хакатон Норникель AI Science Hack, трек 2.
 
 ## Архитектура (6 блоков)
