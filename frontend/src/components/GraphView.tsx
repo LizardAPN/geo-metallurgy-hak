@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
 import type { EntityType, GraphEdge, GraphNode } from '../api/client'
-import { colors, entityBgClass } from '../theme/tokens'
+import { colors } from '../theme/tokens'
 
 interface GraphViewProps {
   nodes: GraphNode[]
@@ -51,6 +51,17 @@ const ENTITY_LABELS: Record<EntityType, string> = {
   Facility: 'Объект',
 }
 
+const ENTITY_BG_CLASS: Record<EntityType, string> = {
+  Process: 'bg-entity-Process',
+  Material: 'bg-entity-Material',
+  Publication: 'bg-entity-Publication',
+  Experiment: 'bg-entity-Experiment',
+  Expert: 'bg-entity-Expert',
+  Equipment: 'bg-entity-Equipment',
+  Property: 'bg-entity-Property',
+  Facility: 'bg-entity-Facility',
+}
+
 function truncateLabel(label: string, max = 14): string {
   if (label.length <= max) return label
   return `${label.slice(0, max - 1)}…`
@@ -70,6 +81,7 @@ export default function GraphView({
 }: GraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const fgRef = useRef<ForceGraphMethods<ForceNode, ForceLink> | undefined>(undefined)
+  const fitPendingRef = useRef(true)
   const [dimensions, setDimensions] = useState({ width: 360, height: 400 })
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
   const [popoverPos, setPopoverPos] = useState({ x: 0, y: 0 })
@@ -120,10 +132,25 @@ export default function GraphView({
   }, [])
 
   useEffect(() => {
-    if (graphData.nodes.length > 0) {
-      fgRef.current?.zoomToFit(400, 30)
-    }
+    fitPendingRef.current = true
   }, [graphData])
+
+  const fitGraphToView = useCallback(() => {
+    if (!fgRef.current || graphData.nodes.length === 0) return
+    fgRef.current.zoomToFit(400, 40)
+    requestAnimationFrame(() => {
+      const zoom = fgRef.current?.zoom()
+      if (zoom !== undefined && zoom < 0.55) {
+        fgRef.current?.zoom(0.55, 200)
+      }
+    })
+  }, [graphData.nodes.length])
+
+  const handleEngineStop = useCallback(() => {
+    if (!fitPendingRef.current) return
+    fitPendingRef.current = false
+    fitGraphToView()
+  }, [fitGraphToView])
 
   useEffect(() => {
     if (!highlightedNodeId || !fgRef.current) return
@@ -162,12 +189,23 @@ export default function GraphView({
         ctx.stroke()
       }
 
-      const fontSize = Math.max(10 / globalScale, 3)
+      const fontSize = 11 / globalScale
+      const label = truncateLabel(node.label)
       ctx.font = `${fontSize}px sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
+      const labelY = y + radius + 2 / globalScale
+      const textWidth = ctx.measureText(label).width
+      const pad = 2 / globalScale
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+      ctx.fillRect(
+        x - textWidth / 2 - pad,
+        labelY - pad / 2,
+        textWidth + pad * 2,
+        fontSize + pad,
+      )
       ctx.fillStyle = colors.graph.label
-      ctx.fillText(truncateLabel(node.label), x, y + radius + 2 / globalScale)
+      ctx.fillText(label, x, labelY)
     },
     [citedSet, flashNodeId],
   )
@@ -237,9 +275,14 @@ export default function GraphView({
             linkWidth={1}
             onNodeClick={(node) => handleNodeClick(node as ForceNode)}
             onBackgroundClick={() => setSelectedNode(null)}
+            onEngineStop={handleEngineStop}
             backgroundColor={colors.surface.card}
             cooldownTicks={80}
+            minZoom={0.35}
+            maxZoom={8}
             enableNodeDrag
+            enablePanInteraction
+            enableZoomInteraction
           />
         )}
 
@@ -252,7 +295,7 @@ export default function GraphView({
               {selectedNode.name}
             </p>
             <span
-              className={`inline-block px-1.5 py-0.5 rounded-badge text-[10px] text-white mb-2 ${entityBgClass[selectedNode.type]}`}
+              className={`inline-block px-1.5 py-0.5 rounded-badge text-[10px] text-white mb-2 ${ENTITY_BG_CLASS[selectedNode.type]}`}
             >
               {ENTITY_LABELS[selectedNode.type]}
             </span>
@@ -294,18 +337,18 @@ export default function GraphView({
       <div className="px-4 pb-3 flex flex-wrap gap-x-3 gap-y-1 items-center shrink-0">
         {ENTITY_TYPES.map((type) => (
           <div key={type} className="flex items-center gap-1">
-            <span className={`w-2 h-2 rounded-full shrink-0 ${entityBgClass[type]}`} />
+            <span className={`w-2 h-2 rounded-full shrink-0 ${ENTITY_BG_CLASS[type]}`} />
             <span className="text-[10px] text-neutral-500">{ENTITY_LABELS[type]}</span>
           </div>
         ))}
-        <div className="flex items-center gap-1 text-semantic-contradiction-text">
-          <svg width="16" height="2" className="shrink-0" aria-hidden>
+        <div className="flex items-center gap-1">
+          <svg width="16" height="2" className="shrink-0">
             <line
               x1="0"
               y1="1"
               x2="16"
               y2="1"
-              stroke="currentColor"
+              stroke={colors.semantic.contradiction.text}
               strokeWidth="2"
               strokeDasharray="3 2"
             />

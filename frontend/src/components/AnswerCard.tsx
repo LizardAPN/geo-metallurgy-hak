@@ -90,7 +90,10 @@ export default function AnswerCard({ response, onCitationClick }: AnswerCardProp
       </div>
 
       <div className="px-4 pb-3 text-neutral-800">
-        <ReactMarkdown components={markdownComponents} urlTransform={citationUrlTransform}>
+        <ReactMarkdown
+          components={markdownComponents}
+          urlTransform={citationUrlTransform}
+        >
           {processedMarkdown}
         </ReactMarkdown>
       </div>

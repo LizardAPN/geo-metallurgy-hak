@@ -1,7 +1,5 @@
 /** Design tokens — single source for Tailwind and canvas (force-graph). */
 
-import type { EntityType } from '../api/client'
-
 export const colors = {
   surface: {
     app: '#FAFAF9',
@@ -41,15 +39,3 @@ export const radii = {
   badge: '4px',
   pill: '999px',
 } as const
-
-/** Tailwind bg-* classes for entity type dots (DOM only; canvas uses colors.entity). */
-export const entityBgClass: Record<EntityType, string> = {
-  Process: 'bg-entity-Process',
-  Material: 'bg-entity-Material',
-  Publication: 'bg-entity-Publication',
-  Experiment: 'bg-entity-Experiment',
-  Expert: 'bg-entity-Expert',
-  Equipment: 'bg-entity-Equipment',
-  Property: 'bg-entity-Property',
-  Facility: 'bg-entity-Facility',
-}
