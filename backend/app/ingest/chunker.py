@@ -19,6 +19,7 @@ COALESCE_MIN_STANDALONE = 40
 SLIDE_AVG_BLOCK_LEN = 120
 MIN_TEXT_CHUNK = 300
 CROSS_SECTION_MERGE_TARGET = 1200
+PRESENTATION_SLIDE_MAX = 2000
 
 
 def _detect_lang(text: str) -> str:
@@ -427,6 +428,197 @@ def _chunk_paragraphs(
   return chunks
 
 
+def _make_text_chunk(
+  *,
+  doc_id: str,
+  text: str,
+  section: str,
+  page: int | None,
+  file_name: str,
+  source_key: str,
+  author_hint: str | None,
+  venue: str | None,
+  year: int | None,
+  doc_type: str | None,
+) -> ParsedChunk:
+  chunk_text = _dedupe_repeated_lines(text.strip())
+  return ParsedChunk(
+    doc_id=doc_id,
+    chunk_id=f"{doc_id}_00000",
+    text=chunk_text,
+    kind="text",
+    section=section,
+    page=page,
+    lang=_detect_lang(chunk_text),
+    file_name=file_name,
+    source_key=source_key,
+    author_hint=author_hint,
+    venue=venue,
+    year=year,
+    doc_type=doc_type,
+  )
+
+
+def _make_table_chunk(
+  *,
+  doc_id: str,
+  block: Block,
+  context: str,
+  file_name: str,
+  source_key: str,
+  author_hint: str | None,
+  venue: str | None,
+  year: int | None,
+  doc_type: str | None,
+) -> ParsedChunk:
+  text = f"{context}\n\n{block.text}".strip() if context else block.text
+  text = _dedupe_repeated_lines(text)
+  return ParsedChunk(
+    doc_id=doc_id,
+    chunk_id=f"{doc_id}_00000",
+    text=text,
+    kind="table",
+    section=block.section,
+    page=block.page,
+    lang=_detect_lang(block.text),
+    file_name=file_name,
+    source_key=source_key,
+    author_hint=author_hint,
+    venue=venue,
+    year=year,
+    doc_type=doc_type,
+  )
+
+
+def _flush_presentation_text_run(
+  text_blocks: list[Block],
+  *,
+  doc_id: str,
+  file_name: str,
+  source_key: str,
+  author_hint: str | None,
+  venue: str | None,
+  year: int | None,
+  doc_type: str | None,
+  chunks: list[ParsedChunk],
+) -> None:
+  if not text_blocks:
+    return
+
+  merged = "\n".join(b.text for b in text_blocks if b.text.strip()).strip()
+  if not merged:
+    return
+
+  if len(merged) <= PRESENTATION_SLIDE_MAX:
+    first = text_blocks[0]
+    section = first.section or merged.split("\n", 1)[0][:80]
+    chunks.append(
+      _make_text_chunk(
+        doc_id=doc_id,
+        text=merged,
+        section=section,
+        page=first.page,
+        file_name=file_name,
+        source_key=source_key,
+        author_hint=author_hint,
+        venue=venue,
+        year=year,
+        doc_type=doc_type,
+      )
+    )
+    return
+
+  for block in text_blocks:
+    if not block.text.strip():
+      continue
+    chunks.append(
+      _make_text_chunk(
+        doc_id=doc_id,
+        text=block.text,
+        section=block.section or block.text.split("\n", 1)[0][:80],
+        page=block.page,
+        file_name=file_name,
+        source_key=source_key,
+        author_hint=author_hint,
+        venue=venue,
+        year=year,
+        doc_type=doc_type,
+      )
+    )
+
+
+def _blocks_to_chunks_presentation(
+  blocks: list[Block],
+  *,
+  doc_id: str,
+  file_name: str,
+  source_key: str,
+  author_hint: str | None,
+  venue: str | None,
+  year: int | None,
+  doc_type: str | None,
+) -> list[ParsedChunk]:
+  chunkable = [b for b in blocks if b.section != "references"]
+  chunks: list[ParsedChunk] = []
+  prev_paragraph: str | None = None
+  index = 0
+
+  while index < len(chunkable):
+    page = chunkable[index].page
+    slide_blocks: list[Block] = []
+    while index < len(chunkable) and chunkable[index].page == page:
+      slide_blocks.append(chunkable[index])
+      index += 1
+
+    text_run: list[Block] = []
+    for block in slide_blocks:
+      if block.type == "table":
+        _flush_presentation_text_run(
+          text_run,
+          doc_id=doc_id,
+          file_name=file_name,
+          source_key=source_key,
+          author_hint=author_hint,
+          venue=venue,
+          year=year,
+          doc_type=doc_type,
+          chunks=chunks,
+        )
+        text_run = []
+        context = prev_paragraph or ""
+        chunks.append(
+          _make_table_chunk(
+            doc_id=doc_id,
+            block=block,
+            context=context,
+            file_name=file_name,
+            source_key=source_key,
+            author_hint=author_hint,
+            venue=venue,
+            year=year,
+            doc_type=doc_type,
+          )
+        )
+        prev_paragraph = None
+      elif block.type in ("paragraph", "heading"):
+        text_run.append(block)
+        prev_paragraph = block.text
+
+    _flush_presentation_text_run(
+      text_run,
+      doc_id=doc_id,
+      file_name=file_name,
+      source_key=source_key,
+      author_hint=author_hint,
+      venue=venue,
+      year=year,
+      doc_type=doc_type,
+      chunks=chunks,
+    )
+
+  return _renumber_chunk_ids(chunks, doc_id)
+
+
 def blocks_to_chunks(
   blocks: list[Block],
   *,
@@ -437,8 +629,21 @@ def blocks_to_chunks(
   venue: str | None = None,
   year: int | None = None,
   doc_type: str | None = None,
+  presentation: bool = False,
 ) -> list[ParsedChunk]:
   """Разбить блоки на ParsedChunk (таблицы — атомарные чанки)."""
+  if presentation:
+    return _blocks_to_chunks_presentation(
+      blocks,
+      doc_id=doc_id,
+      file_name=file_name,
+      source_key=source_key,
+      author_hint=author_hint,
+      venue=venue,
+      year=year,
+      doc_type=doc_type,
+    )
+
   chunkable = [b for b in blocks if b.section != "references"]
   chunkable = _coalesce_blocks(chunkable)
   chunks: list[ParsedChunk] = []
