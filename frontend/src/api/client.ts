@@ -30,6 +30,7 @@ export type RelationType =
   | 'uses_equipment'
   | 'part_of'
   | 'relates_to'
+  | 'has_property'
 
 /** Типы узлов, не отображаемые в графе визуализации */
 export const GRAPH_HIDDEN_ENTITY_TYPES: EntityType[] = ['Chunk']
@@ -80,9 +81,12 @@ export interface GraphSubset {
 
 export interface Citation {
   doc_id: string
+  chunk_id?: string | null
   title: string
   snippet: string
   confidence: number
+  page?: number | null
+  score?: number | null
   year?: number | null
   geography?: string
 }
@@ -117,6 +121,10 @@ export interface QueryResponse {
   recommended_experts: RecommendedExpert[]
   mock: boolean
   warning?: string | null
+  meta: {
+    mode: 'vector' | 'vector+graph' | 'full'
+    took_ms: number
+  }
 }
 
 export interface SubgraphResponse {
@@ -126,7 +134,9 @@ export interface SubgraphResponse {
 }
 
 export interface GraphStatsResponse {
-  entity_count: number
+  entities: number
+  chunks: number
+  publications: number
   mock: boolean
 }
 
@@ -141,7 +151,14 @@ const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === '1'
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)
   if (!response.ok) {
-    throw new Error(`API error ${response.status}: ${response.statusText}`)
+    let detail = response.statusText
+    try {
+      const body = await response.json() as { detail?: string }
+      detail = body.detail || detail
+    } catch {
+      // Keep statusText when the server does not return JSON.
+    }
+    throw new Error(detail || `API error ${response.status}`)
   }
   return response.json() as Promise<T>
 }
@@ -153,7 +170,10 @@ export async function postQuery(
   if (USE_MOCKS) {
     await new Promise((resolve) => setTimeout(resolve, 600))
     const mock = await import('../mocks/response.json')
-    return mock.default as QueryResponse
+    return {
+      ...(mock.default as Omit<QueryResponse, 'meta'> & Partial<QueryResponse>),
+      meta: { mode: 'full', took_ms: 600 },
+    } as QueryResponse
   }
   return fetchJson<QueryResponse>(`${API_URL}/api/query`, {
     method: 'POST',
@@ -199,7 +219,12 @@ export async function getGraphStats(): Promise<GraphStatsResponse> {
   if (USE_MOCKS) {
     const mock = await import('../mocks/graph.json')
     const data = mock.default as { entity_count: number }
-    return { entity_count: data.entity_count, mock: true }
+    return {
+      entities: data.entity_count,
+      chunks: 0,
+      publications: 0,
+      mock: true,
+    }
   }
   return fetchJson<GraphStatsResponse>(`${API_URL}/api/graph/stats`)
 }

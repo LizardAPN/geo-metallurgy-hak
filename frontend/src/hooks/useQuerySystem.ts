@@ -44,11 +44,15 @@ export function useQuerySystem() {
     .reverse()
     .find((item) => item.role === 'assistant' && item.response)?.response ?? null
 
-  useEffect(() => {
+  const refreshGraphStats = useCallback(() => {
     getGraphStats()
-      .then((stats) => setEntityCount(stats.entity_count))
+      .then((stats) => setEntityCount(stats.entities))
       .catch(() => setEntityCount(null))
   }, [])
+
+  useEffect(() => {
+    refreshGraphStats()
+  }, [refreshGraphStats])
 
   const highlightNode = useCallback((docId: string) => {
     setHighlightedNodeId(docId)
@@ -86,6 +90,7 @@ export function useQuerySystem() {
               : item,
           ),
         )
+        refreshGraphStats()
       } catch (err) {
         if (controller.signal.aborted) return
         const message = err instanceof Error ? err.message : 'Ошибка запроса'
@@ -102,7 +107,7 @@ export function useQuerySystem() {
         }
       }
     },
-    [filters],
+    [filters, refreshGraphStats],
   )
 
   const retryLast = useCallback(async () => {
@@ -138,6 +143,7 @@ export function useQuerySystem() {
           item.id === pendingId ? { ...item, response: result } : item,
         ),
       )
+      refreshGraphStats()
     } catch (err) {
       if (controller.signal.aborted) return
       const message = err instanceof Error ? err.message : 'Ошибка запроса'
@@ -149,7 +155,7 @@ export function useQuerySystem() {
     } finally {
       if (!controller.signal.aborted) setLoading(false)
     }
-  }, [conversation, filters])
+  }, [conversation, filters, refreshGraphStats])
 
   useEffect(() => {
     return () => {
