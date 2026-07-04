@@ -9,7 +9,7 @@ from typing import Any
 
 from neo4j import Driver
 
-from app.schemas.ontology import Entity, EntityType, ExtractionResult, Relation
+from app.schemas.ontology import Entity, EntityType, GraphExtractionBundle, Relation
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def _relation_row(relation: Relation) -> dict[str, Any]:
 
 def load_jsonl(path: Path, driver: Driver) -> tuple[int, int]:
     """
-    Загрузить ExtractionResult из JSONL в Neo4j.
+    Загрузить GraphExtractionBundle из JSONL в Neo4j.
 
     Args:
         path: Путь к data/extracted/*.jsonl
@@ -141,16 +141,16 @@ def batch_upsert_relations(driver: Driver, relations: list[Relation]) -> int:
     )
 
 
-def read_extraction_jsonl(path: Path) -> list[ExtractionResult]:
-    """Прочитать JSONL с ExtractionResult."""
-    results: list[ExtractionResult] = []
+def read_extraction_jsonl(path: Path) -> list[GraphExtractionBundle]:
+    """Прочитать JSONL с GraphExtractionBundle."""
+    results: list[GraphExtractionBundle] = []
     with path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             data: dict[str, Any] = json.loads(line)
-            results.append(ExtractionResult.model_validate(data))
+            results.append(GraphExtractionBundle.model_validate(data))
     return results
 
 
