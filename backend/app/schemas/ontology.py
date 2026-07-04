@@ -43,6 +43,7 @@ class RelationType(StrEnum):
     USES_EQUIPMENT = "uses_equipment"
     PART_OF = "part_of"
     RELATES_TO = "relates_to"
+    HAS_PROPERTY = "has_property"
 
 
 class Geography(StrEnum):
@@ -111,11 +112,11 @@ class NumericConstraint(BaseModel):
             vmin = self.value_min
             if vmin is None and self.value is not None:
                 vmin = self.value
-            if vmin is None or self.value_max is None:
-                raise ValueError("operator=range requires value_min and value_max")
-            return self.model_copy(update={"value_min": vmin, "value": None})
-        if self.value is None:
-            raise ValueError(f"operator={self.operator} requires value")
+            if vmin is not None and self.value_max is not None:
+                return self.model_copy(update={"value_min": vmin, "value": None})
+            return self
+        if self.value is not None:
+            return self
         return self
 
 
@@ -234,8 +235,54 @@ class ParsedDocumentMeta(BaseModel):
     processing_seconds: float | None = None
 
 
+class ExtractedEntity(BaseModel):
+    """Сущность из LLM-ответа extraction (до маппинга в граф)."""
+
+    tmp_id: str
+    type: EntityType
+    name: str
+    name_norm: str
+    aliases: list[str] = Field(default_factory=list)
+    geography: str = "UNKNOWN"
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class ExtractedRelation(BaseModel):
+    """Связь из LLM-ответа extraction (source/target — tmp_id или DOC)."""
+
+    source: str
+    target: str
+    type: RelationType
+    numeric: NumericConstraint | None = None
+    attrs: dict[str, str] = Field(default_factory=dict)
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
 class ExtractionResult(BaseModel):
-    """Результат извлечения из одного документа/чанка."""
+    """Результат LLM-извлечения из одного чанка."""
+
+    entities: list[ExtractedEntity] = Field(default_factory=list)
+    relations: list[ExtractedRelation] = Field(default_factory=list)
+
+
+class ChunkExtractionRecord(BaseModel):
+    """Одна строка data/extracted/{doc_id}.jsonl."""
+
+    chunk_id: str
+    doc_id: str
+    source_doc: str
+    source_chunk: str
+    year: int | None = None
+    result: ExtractionResult
+    model: str
+    retries: int = 0
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    cost_usd: float | None = None
+
+
+class GraphExtractionBundle(BaseModel):
+    """Graph-ready результат (Entity/Relation с VerificationMeta)."""
 
     doc_id: str
     entities: list[Entity] = Field(default_factory=list)

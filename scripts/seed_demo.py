@@ -22,7 +22,7 @@ def build_demo_extraction() -> dict:
         DocType,
         Entity,
         EntityType,
-        ExtractionResult,
+        GraphExtractionBundle,
         ExperimentScale,
         Lang,
         NumericConstraint,
@@ -135,7 +135,7 @@ def build_demo_extraction() -> dict:
                  verification=vm("pub-003", 0.86)),
     ]
 
-    result = ExtractionResult(doc_id="demo_seed", entities=entities, relations=relations)
+    result = GraphExtractionBundle(doc_id="demo_seed", entities=entities, relations=relations)
     return result.model_dump(mode="json")
 
 

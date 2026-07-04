@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.config import Settings
-from app.schemas.ontology import ExtractionResult, ParsedChunk
+from app.schemas.ontology import ChunkExtractionRecord, GraphExtractionBundle, ParsedChunk
 from app.storage import s3 as s3_module
 from app.storage.s3 import S3Storage
 
@@ -173,7 +173,7 @@ def test_no_secrets_in_logs(
     with caplog.at_level("INFO"):
         storage = S3Storage(_configured_s3_settings())
         storage.upload_jsonl(
-            [ExtractionResult(doc_id="d1", entities=[], relations=[])],
+            [GraphExtractionBundle(doc_id="d1", entities=[], relations=[])],
             "extracted/d1.jsonl",
         )
 
