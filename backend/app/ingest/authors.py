@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import re
+import string
 
 _DOKLAD_RE = re.compile(r"Доклад_(.+)\.(pdf|docx)$", re.IGNORECASE)
 _SURNAME_INITIALS_RE = re.compile(
   r"^([А-ЯЁ][а-яё]+ [А-ЯЁ]\.? ?[А-ЯЁ]\.?)[ _]"
 )
+_FIO_ANYWHERE_RE = re.compile(
+  r"([А-ЯЁ][а-яё]{2,}) ([А-ЯЁ])\.\s?([А-ЯЁ])\.?"
+)
 _ENGLISH_NAME_RE = re.compile(r"^([A-Z][a-z]+_[A-Z][a-z]+)_")
-
-import string
+_CYRILLIC_INITIALS_RE = re.compile(
+  r"^([А-ЯЁ][а-яё]+)\s+([А-ЯЁ])\.?\s*([А-ЯЁ])\.?$"
+)
 
 _CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
@@ -72,15 +77,29 @@ def fix_file_metadata_author(raw: str | None) -> str | None:
   return _try_decode_variants(stripped)
 
 
+def _normalize_author_hint(hint: str) -> str:
+  hint = hint.strip()
+  match = _CYRILLIC_INITIALS_RE.match(hint)
+  if match:
+    surname, i1, i2 = match.groups()
+    return f"{surname} {i1}.{i2}."
+  return hint
+
+
 def extract_author_hint(file_name: str) -> str | None:
   """Извлечь подсказку автора из имени файла."""
   match = _DOKLAD_RE.search(file_name)
   if match:
-    return match.group(1).strip()
+    return _normalize_author_hint(match.group(1).strip())
+
+  match = _FIO_ANYWHERE_RE.search(file_name)
+  if match:
+    surname, i1, i2 = match.groups()
+    return f"{surname} {i1}.{i2}."
 
   match = _SURNAME_INITIALS_RE.match(file_name)
   if match:
-    return match.group(1).strip()
+    return _normalize_author_hint(match.group(1).strip())
 
   match = _ENGLISH_NAME_RE.match(file_name)
   if match:

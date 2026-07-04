@@ -27,7 +27,11 @@ def test_is_noise_allows_short_table_cell() -> None:
 
 
 def test_extract_author_hint_doklad() -> None:
-  assert extract_author_hint("Доклад_Румянцев А.Е.pdf") == "Румянцев А.Е"
+  assert extract_author_hint("Доклад_Румянцев А.Е.pdf") == "Румянцев А.Е."
+
+
+def test_extract_author_hint_kulagin() -> None:
+  assert extract_author_hint("Кулагин А.Д. доклад 2024.pdf") == "Кулагин А.Д."
 
 
 def test_extract_author_hint_surname_initials() -> None:
@@ -35,7 +39,7 @@ def test_extract_author_hint_surname_initials() -> None:
     extract_author_hint("Трофимов А.В. Опыт создания блочных геомеханических моделей в ГГИС.pdf")
     == "Трофимов А.В."
   )
-  assert extract_author_hint("Тяпкина ПА_Пермь_Зимняя школа.pdf") == "Тяпкина ПА"
+  assert extract_author_hint("Тяпкина ПА_Пермь_Зимняя школа.pdf") == "Тяпкина П.А."
 
 
 def test_extract_author_hint_english() -> None:
