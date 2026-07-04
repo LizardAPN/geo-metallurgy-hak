@@ -1,4 +1,4 @@
-.PHONY: up down init-db embed-only ingest extract extract-core extract-sample load-chunks load-graph load-graph-sample test seed-demo s3-push s3-pull s3-push-embeddings s3-pull-embeddings s3-push-extracted s3-pull-extracted llm-up llm-smoke t2c-sample synth-sample
+.PHONY: up down init-db embed-only ingest extract extract-core extract-sample load-chunks load-graph load-graph-sample graph-report test seed-demo s3-push s3-pull s3-push-embeddings s3-pull-embeddings s3-push-extracted s3-pull-extracted llm-up llm-smoke t2c-sample synth-sample
 
 up:
 	docker compose up -d --build
@@ -38,6 +38,9 @@ load-graph:
 
 load-graph-sample:
 	PYTHONPATH=backend backend/.venv/bin/python -m app.graph.loader --file data/extracted/_sample.jsonl
+
+graph-report:
+	PYTHONPATH=backend backend/.venv/bin/python backend/scripts/graph_report.py
 
 s3-push:
 	PYTHONPATH=backend backend/.venv/bin/python scripts/run_pipeline.py --push-s3
