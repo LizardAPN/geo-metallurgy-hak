@@ -14,6 +14,7 @@ from app.graph.loader import (
     load_document,
     read_extraction_records,
 )
+from app.graph.stop_entities import is_suspicious_name_norm
 from app.retrieval.embedder import _text_hash
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_matte.jsonl"
@@ -50,6 +51,14 @@ def test_aggregate_entities_dedup() -> None:
     assert len(grouped) == 2
     tmp_map = _build_tmp_id_map(records)
     assert tmp_map["e1"] == ("Material", "штейн мдп")
+
+
+def test_is_suspicious_name_norm() -> None:
+    assert is_suspicious_name_norm("ab")
+    assert is_suspicious_name_norm("12345")
+    assert is_suspicious_name_norm("abc")
+    assert not is_suspicious_name_norm("штейн мдп")
+    assert not is_suspicious_name_norm("nickel ore")
 
 
 def test_text_hash_stable() -> None:

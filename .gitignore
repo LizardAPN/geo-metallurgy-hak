@@ -4,7 +4,10 @@
 venv/
 
 # Data corpus (not committed)
-data/
+data/*
+!data/reference/
+data/reference/*
+!data/reference/stop_entities.json
 
 # Python
 __pycache__/
