@@ -19,7 +19,7 @@ from app.retrieval.text2cypher import normalize_cypher, validate_cypher
 from app.schemas.api import QueryResponse, RetrievedContext
 from app.schemas.ontology import GraphEdge, GraphNode, RelationType
 from app.synthesis.answerer import build_synthesis_context, strip_invalid_citations
-from app.synthesis.gaps import find_gaps
+from app.synthesis.gaps import _is_redundant_pair, _is_valid_anchor, find_gaps
 
 client = TestClient(app)
 
@@ -122,6 +122,44 @@ def test_find_gaps_unlinked_pair() -> None:
     assert len(gaps) == 1
     assert "обратный осмос" in gaps[0].description
     assert "ионный обмен" in gaps[0].description
+
+
+def test_is_valid_anchor_rejects_junk() -> None:
+    """Якоря с цифрами/символами, короткие, не из запроса и вне якорных label отбраковываются."""
+    assert not _is_valid_anchor("ε = 8,11%", "Property", "извлечение")  # символы %=
+    assert not _is_valid_anchor("медь", "Material", "медь")  # длина < 5
+    assert not _is_valid_anchor("кучное выщелачивание", "Process", "никель")  # нет матча на term
+    assert not _is_valid_anchor("кучное выщелачивание", "Experiment", "выщелачивание")  # label вне якорей
+
+
+def test_is_valid_anchor_accepts_query_term() -> None:
+    """Осмысленный якорь, матчащийся на термин запроса (CONTAINS), проходит."""
+    assert _is_valid_anchor("кучное выщелачивание", "Process", "выщелачивание")
+    assert _is_valid_anchor("никелевая руда", "Material", "никелевая руда")
+
+
+def test_is_redundant_pair() -> None:
+    """Варианты одного термина считаются дублем, разные — нет."""
+    assert _is_redundant_pair(
+        "термические методы переработки", "термические методы утилизации"
+    )
+    assert _is_redundant_pair("выщелачивание", "кучное выщелачивание")
+    assert not _is_redundant_pair("кучное выщелачивание", "никелевая руда")
+
+
+def test_find_gaps_skips_redundant_pair() -> None:
+    """Дублирующая пара не доходит до Cypher-проверки пробела."""
+    mock_session = MagicMock()
+    mock_driver = MagicMock()
+    mock_driver.session.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_driver.session.return_value.__exit__ = MagicMock(return_value=False)
+
+    with patch("app.synthesis.gaps.get_driver", return_value=mock_driver):
+        gaps = find_gaps(
+            ["термические методы переработки", "термические методы утилизации"]
+        )
+    assert gaps == []
+    mock_session.run.assert_not_called()
 
 
 def test_execute_uses_read_session() -> None:

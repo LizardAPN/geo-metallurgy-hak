@@ -12,9 +12,13 @@ from app.schemas.api import KnowledgeGap, RecommendedExpert
 
 logger = logging.getLogger(__name__)
 
-ANCHOR_LABELS = ["Process", "Material", "Property"]
+ANCHOR_LABELS = ["Process", "Material"]
 MAX_GAPS = 3
 MAX_ANCHORS = 5
+MIN_ANCHOR_LEN = 5
+MIN_ANCHOR_DEGREE = 3
+_REDUNDANT_PREFIX_LEN = 12
+_ANCHOR_JUNK = re.compile(r"[\d%=°]")
 
 _STOPWORDS = frozenset(
     {
@@ -32,6 +36,8 @@ WHERE any(l IN labels(n) WHERE l IN $labels)
     toLower(n.name_norm) CONTAINS $term
     OR any(a IN coalesce(n.aliases, []) WHERE toLower(a) CONTAINS $term)
   )
+WITH n, count { (n)--() } AS degree
+WHERE degree >= $min_degree
 RETURN n.name AS name, n.name_norm AS name_norm, labels(n)[0] AS label
 LIMIT 3
 """
@@ -64,8 +70,29 @@ def _query_terms(query: str) -> list[str]:
     return [t for t in tokens if len(t) >= 4 and t not in _STOPWORDS]
 
 
+def _is_valid_anchor(name_norm: str, label: str, term: str) -> bool:
+    """Якорь годен: label Process|Material, длина >= 5, без цифр/символов, матч на термин запроса."""
+    nn = name_norm.strip().lower()
+    if label not in ANCHOR_LABELS:
+        return False
+    if len(nn) < MIN_ANCHOR_LEN:
+        return False
+    if _ANCHOR_JUNK.search(nn):
+        return False
+    return term in nn or nn in term
+
+
+def _is_redundant_pair(x: str, y: str) -> bool:
+    """Пара — варианты одного термина: подстрока или совпадение первых 12 символов."""
+    a = x.strip().lower()
+    b = y.strip().lower()
+    if a in b or b in a:
+        return True
+    return a[:_REDUNDANT_PREFIX_LEN] == b[:_REDUNDANT_PREFIX_LEN]
+
+
 def resolve_anchor_entities(query: str) -> list[dict[str, str]]:
-    """Найти якорные сущности Process/Material/Property по терминам запроса."""
+    """Найти якорные сущности Process/Material по терминам запроса."""
     terms = _query_terms(query)
     if not terms:
         return []
@@ -81,16 +108,21 @@ def resolve_anchor_entities(query: str) -> list[dict[str, str]]:
                     _RESOLVE_ANCHORS,
                     labels=ANCHOR_LABELS,
                     term=term,
+                    min_degree=MIN_ANCHOR_DEGREE,
                     timeout=10.0,
                 )
                 for record in records:
                     name_norm = str(record["name_norm"])
-                    if name_norm not in anchors:
-                        anchors[name_norm] = {
-                            "name": str(record["name"]),
-                            "name_norm": name_norm,
-                            "label": str(record["label"]),
-                        }
+                    label = str(record["label"])
+                    if name_norm in anchors:
+                        continue
+                    if not _is_valid_anchor(name_norm, label, term):
+                        continue
+                    anchors[name_norm] = {
+                        "name": str(record["name"]),
+                        "name_norm": name_norm,
+                        "label": label,
+                    }
     except Exception as exc:
         logger.warning("resolve_anchor_entities failed: %s", exc)
     return list(anchors.values())[:MAX_ANCHORS]
@@ -115,6 +147,8 @@ def find_gaps(query_entities: list[str]) -> list[KnowledgeGap]:
                 for y in query_entities[i + 1 :]:
                     if len(gaps) >= MAX_GAPS:
                         break
+                    if _is_redundant_pair(x, y):
+                        continue
                     record = session.run(
                         _CHECK_GAP,
                         x=x,

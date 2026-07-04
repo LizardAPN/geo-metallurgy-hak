@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 _VECTOR_SEARCH = """
 CALL db.index.vector.queryNodes('chunk_embedding', $overfetch, $qvec)
 YIELD node, score
-MATCH (node)-[:part_of]->(p:Publication)
+MATCH (node)-[:PART_OF]->(p:Publication)
 WHERE NOT coalesce(node.is_reference, false)
   AND ($year_min IS NULL OR p.year >= $year_min)
   AND ($year_max IS NULL OR p.year <= $year_max)

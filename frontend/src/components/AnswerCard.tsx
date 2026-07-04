@@ -22,8 +22,12 @@ function modeLabel(mode: QueryResponse['meta']['mode']): string {
   return 'поиск по документам'
 }
 
-function countConsensusSources(citations: Citation[], minConf = 0.7): number {
-  return citations.filter((c) => c.confidence >= minConf).length
+function countCitedDocIds(markdown: string): number {
+  const ids = new Set<string>()
+  for (const m of markdown.matchAll(/\[doc:([^\]]+)\]/g)) {
+    ids.add(m[1])
+  }
+  return ids.size
 }
 
 function preprocessMarkdown(markdown: string): string {
@@ -80,8 +84,8 @@ export default function AnswerCard({
     [response.answer_markdown],
   )
 
-  const consensusCount = countConsensusSources(response.citations)
-  const showConsensus = response.meta.mode === 'full' && consensusCount > 0
+  const consensusCount = countCitedDocIds(response.answer_markdown)
+  const showConsensus = response.meta.mode === 'full' && consensusCount >= 2
   const hasContradictions = response.contradictions.length > 0
   const hasExperts = response.recommended_experts.length > 0
   const isEmptyResult = response.citations.length === 0
