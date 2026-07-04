@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -40,9 +40,12 @@ class Citation(BaseModel):
     """Цитата на источник в ответе."""
 
     doc_id: str
+    chunk_id: str | None = None
     title: str
     snippet: str
     confidence: float = Field(ge=0.0, le=1.0)
+    page: int | None = None
+    score: float | None = None
     year: int | None = None
     geography: str = "UNKNOWN"
 
@@ -81,6 +84,13 @@ class GraphSubset(BaseModel):
     edges: list[GraphEdge] = Field(default_factory=list)
 
 
+class QueryMeta(BaseModel):
+    """Метаданные выполнения запроса."""
+
+    mode: Literal["vector", "vector+graph", "full"] = "vector"
+    took_ms: int = Field(ge=0)
+
+
 class QueryResponse(BaseModel):
     """Ответ POST /api/query."""
 
@@ -92,6 +102,16 @@ class QueryResponse(BaseModel):
     recommended_experts: list[RecommendedExpert] = Field(default_factory=list)
     mock: bool = False
     warning: str | None = None
+    meta: QueryMeta = Field(default_factory=QueryMeta)
+
+
+class GraphStatsResponse(BaseModel):
+    """Ответ GET /api/graph/stats."""
+
+    entities: int = 0
+    chunks: int = 0
+    publications: int = 0
+    mock: bool = False
 
 
 class SubgraphResponse(BaseModel):

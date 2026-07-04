@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     s3_bucket: str = ""
     s3_access_key_id: str = ""
     s3_secret_access_key: str = ""
+    feature_graph: bool = False
+    feature_synthesis: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
