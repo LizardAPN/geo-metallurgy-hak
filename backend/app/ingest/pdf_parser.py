@@ -11,6 +11,7 @@ import pdfplumber
 import pytesseract
 from pytesseract import TesseractNotFoundError
 
+from app.ingest.authors import fix_file_metadata_author
 from app.ingest.types import Block, DocMeta, ParseResult
 
 logger = logging.getLogger(__name__)
@@ -245,7 +246,7 @@ def parse_pdf(path: Path) -> ParseResult:
 
   meta = doc.metadata or {}
   doc_meta = DocMeta(
-    file_metadata_author=meta.get("author") or None,
+    file_metadata_author=fix_file_metadata_author(meta.get("author")),
     created=meta.get("creationDate") or None,
     pages=len(doc),
     ocr_pages=ocr_pages,

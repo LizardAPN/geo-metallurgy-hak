@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from docx import Document
 
+from app.ingest.authors import extract_author_hint, fix_file_metadata_author
 from app.ingest.chunker import _coalesce_blocks, blocks_to_chunks
 from app.ingest.noise import is_noise
 from app.ingest.parser import parse_file
@@ -22,6 +23,32 @@ def test_is_noise_rejects_short_gibberish() -> None:
 
 def test_is_noise_allows_short_table_cell() -> None:
   assert not is_noise("12,5", is_table_cell=True)
+
+
+def test_extract_author_hint_doklad() -> None:
+  assert extract_author_hint("Доклад_Румянцев А.Е.pdf") == "Румянцев А.Е"
+
+
+def test_extract_author_hint_surname_initials() -> None:
+  assert (
+    extract_author_hint("Трофимов А.В. Опыт создания блочных геомеханических моделей в ГГИС.pdf")
+    == "Трофимов А.В."
+  )
+  assert extract_author_hint("Тяпкина ПА_Пермь_Зимняя школа.pdf") == "Тяпкина ПА"
+
+
+def test_extract_author_hint_english() -> None:
+  assert extract_author_hint("Nicole_Roocke_report.pdf") == "Nicole Roocke"
+
+
+def test_fix_pdf_metadata_author_garbage() -> None:
+  garbage = "˜>4>E0=>20 !25B;048<8@>2=0"
+  fixed = fix_file_metadata_author(garbage)
+  assert fixed is None or any("\u0400" <= c <= "\u04FF" for c in fixed)
+
+
+def test_fix_pdf_metadata_author_clean() -> None:
+  assert fix_file_metadata_author("Julia Gershteyn") == "Julia Gershteyn"
 
 
 def test_coalesce_slide_page() -> None:
@@ -43,6 +70,25 @@ def test_coalesce_short_blocks_merged() -> None:
   coalesced = _coalesce_blocks(blocks)
   assert len(coalesced) == 1
   assert len(coalesced[0].text) == 51
+
+
+def test_parsed_chunk_author_hint() -> None:
+  blocks = [
+    Block(
+      type="paragraph",
+      text="Достаточно длинный осмысленный текст параграфа для чанкинга.",
+      section="intro",
+    ),
+  ]
+  chunks = blocks_to_chunks(
+    blocks,
+    doc_id="doc_abc123",
+    file_name="Доклад_Румянцев А.Е.pdf",
+    source_key="raw/test.pdf",
+    author_hint="Румянцев А.Е.",
+  )
+  assert len(chunks) == 1
+  assert chunks[0].author_hint == "Румянцев А.Е."
 
 
 def test_table_is_atomic_chunk() -> None:

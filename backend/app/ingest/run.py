@@ -15,6 +15,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
+from app.ingest.authors import extract_author_hint
 from app.ingest.chunker import blocks_to_chunks, write_jsonl, write_references
 from app.ingest.manifest import MANIFEST_NAME, load_manifest, save_manifest
 from app.ingest.parser import parse_file
@@ -183,11 +184,13 @@ def process_local_file(
 
   try:
     result, noise_dropped, reference_texts = parse_file(local_path)
+    author_hint = extract_author_hint(file_name)
     chunks = blocks_to_chunks(
       result.blocks,
       doc_id=doc_id,
       file_name=file_name,
       source_key=source_key,
+      author_hint=author_hint,
     )
     tables = sum(1 for c in chunks if c.kind == "table")
 
@@ -203,7 +206,8 @@ def process_local_file(
       file_name=file_name,
       source_key=source_key,
       file_hash=file_hash,
-      author=result.doc_meta.author,
+      file_metadata_author=result.doc_meta.file_metadata_author,
+      author_hint=author_hint,
       created=result.doc_meta.created,
       pages=result.doc_meta.pages,
       chunks=len(chunks),
