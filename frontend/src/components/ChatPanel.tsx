@@ -95,6 +95,7 @@ export default function ChatPanel({
                   <AnswerCard
                     response={item.response}
                     onCitationClick={onCitationClick}
+                    onExampleClick={handleChipSelect}
                   />
                 </div>
               )

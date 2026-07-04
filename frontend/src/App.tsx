@@ -38,16 +38,23 @@ export default function App() {
 
   const [previewNodes, setPreviewNodes] = useState<GraphNode[]>([])
   const [previewEdges, setPreviewEdges] = useState<GraphEdge[]>([])
+  const [previewLoading, setPreviewLoading] = useState(true)
+  const [previewError, setPreviewError] = useState(false)
 
   useEffect(() => {
     getSubgraph({ limit: 150 })
       .then((data) => {
         setPreviewNodes(data.nodes)
         setPreviewEdges(data.edges)
+        setPreviewError(false)
       })
       .catch(() => {
         setPreviewNodes([])
         setPreviewEdges([])
+        setPreviewError(true)
+      })
+      .finally(() => {
+        setPreviewLoading(false)
       })
   }, [])
 
@@ -103,6 +110,8 @@ export default function App() {
             highlightedNodeId={highlightedNodeId}
             flashNodeId={flashNodeId}
             onSendQuery={sendQuery}
+            loading={previewLoading && !currentResponse}
+            error={previewError && !currentResponse}
           />
         </aside>
       </div>

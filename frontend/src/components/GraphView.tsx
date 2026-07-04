@@ -11,6 +11,8 @@ interface GraphViewProps {
   highlightedNodeId: string | null
   flashNodeId: string | null
   onSendQuery: (text: string) => void
+  loading?: boolean
+  error?: boolean
 }
 
 interface ForceNode {
@@ -85,6 +87,8 @@ export default function GraphView({
   highlightedNodeId,
   flashNodeId,
   onSendQuery,
+  loading = false,
+  error = false,
 }: GraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const fgRef = useRef<ForceGraphMethods<ForceNode, ForceLink> | undefined>(undefined)
@@ -263,7 +267,11 @@ export default function GraphView({
       <div ref={containerRef} className="flex-1 relative min-h-0 mx-2 mb-2 rounded-control border border-surface-border bg-surface-card overflow-hidden">
         {visibleNodes.length === 0 ? (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-neutral-400">
-            Загрузка графа…
+            {loading
+              ? 'Загрузка графа…'
+              : error
+                ? 'Граф временно недоступен'
+                : 'Граф пока пуст'}
           </div>
         ) : (
           <ForceGraph2D

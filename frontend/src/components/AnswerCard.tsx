@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import type { Components } from 'react-markdown'
 import type { Citation, Contradiction, QueryResponse } from '../api/client'
+import { DEMO_QUERIES } from '../constants/demoQueries'
 
 interface AnswerCardProps {
   response: QueryResponse
   onCitationClick: (docId: string) => void
+  onExampleClick: (query: string) => void
 }
 
 function shortDocName(citation: Citation): string {
@@ -14,15 +16,10 @@ function shortDocName(citation: Citation): string {
   return `${label.slice(0, 14)}…`
 }
 
-function buildSummary(response: QueryResponse): string {
-  const methods = new Set(
-    response.graph_subset.nodes
-      .filter((n) => n.type === 'Process')
-      .map((n) => n.name),
-  )
-  const methodCount = methods.size || 3
-  const sourceCount = response.citations.length
-  return `Обессоливание при заданных условиях: ${methodCount} метода, ${sourceCount} источников`
+function modeLabel(mode: QueryResponse['meta']['mode']): string {
+  if (mode === 'full') return 'граф + синтез'
+  if (mode === 'vector+graph') return 'граф знаний'
+  return 'поиск по документам'
 }
 
 function countConsensusSources(citations: Citation[], minConf = 0.7): number {
@@ -38,7 +35,11 @@ function citationUrlTransform(url: string): string {
   return defaultUrlTransform(url)
 }
 
-export default function AnswerCard({ response, onCitationClick }: AnswerCardProps) {
+export default function AnswerCard({
+  response,
+  onCitationClick,
+  onExampleClick,
+}: AnswerCardProps) {
   const [showContradictions, setShowContradictions] = useState(false)
 
   const citationMap = useMemo(() => {
@@ -82,11 +83,50 @@ export default function AnswerCard({ response, onCitationClick }: AnswerCardProp
   const consensusCount = countConsensusSources(response.citations)
   const hasContradictions = response.contradictions.length > 0
   const hasExperts = response.recommended_experts.length > 0
+  const isEmptyResult = response.citations.length === 0
+
+  if (isEmptyResult) {
+    return (
+      <div className="w-full rounded-card border border-surface-border bg-surface-card overflow-hidden">
+        <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium text-neutral-900">Ничего не найдено</h3>
+            <p className="text-sm text-neutral-600 mt-1">
+              Попробуйте переформулировать запрос или расширить фильтры.
+            </p>
+          </div>
+          <span className="shrink-0 text-[10px] px-2 py-1 rounded-badge border border-surface-border bg-neutral-50 text-neutral-500">
+            {modeLabel(response.meta.mode)}
+          </span>
+        </div>
+        <div className="px-4 pb-4 flex flex-wrap gap-2">
+          {DEMO_QUERIES.map((q) => (
+            <button
+              key={q.short}
+              type="button"
+              onClick={() => onExampleClick(q.full)}
+              className="px-3 py-1.5 text-xs rounded-pill border border-surface-border bg-neutral-50 text-neutral-700 hover:bg-surface-card hover:border-brand-primary/30 transition-colors"
+            >
+              {q.short}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full rounded-card border border-surface-border bg-surface-card overflow-hidden">
-      <div className="px-4 pt-4 pb-2">
-        <h3 className="text-sm font-medium text-neutral-900">{buildSummary(response)}</h3>
+      <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium text-neutral-900">Ответ по корпусу документов</h3>
+          {response.warning && (
+            <p className="text-xs text-neutral-500 mt-1">{response.warning}</p>
+          )}
+        </div>
+        <span className="shrink-0 text-[10px] px-2 py-1 rounded-badge border border-surface-border bg-neutral-50 text-neutral-500">
+          {modeLabel(response.meta.mode)}
+        </span>
       </div>
 
       <div className="px-4 pb-3 text-neutral-800">
@@ -98,6 +138,7 @@ export default function AnswerCard({ response, onCitationClick }: AnswerCardProp
         </ReactMarkdown>
       </div>
 
+      {(consensusCount > 0 || hasContradictions || response.knowledge_gaps.length > 0) && (
       <div className="px-4 pb-3 flex flex-wrap gap-1.5">
         {consensusCount > 0 && (
           <span className="inline-flex items-center px-2.5 py-1 rounded-pill text-xs bg-semantic-consensus-bg text-semantic-consensus-text">
@@ -122,6 +163,7 @@ export default function AnswerCard({ response, onCitationClick }: AnswerCardProp
           </span>
         ))}
       </div>
+      )}
 
       {showContradictions && hasContradictions && (
         <div className="px-4 pb-3 space-y-2 border-t border-surface-border pt-3 mx-4 mb-3">
