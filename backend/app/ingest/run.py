@@ -471,22 +471,36 @@ def _print_summary(outputs: list[ProcessOutput], total_seconds: float, parsed_di
       print(f"  {out.file_name}: {out.processing_seconds:.1f}s")
 
   all_chunk_ids: list[str] = []
+  seen_doc_ids: set[str] = set()
+  docs_with_internal_dupes: list[str] = []
   for out in outputs:
     if out.meta.status not in ("ok", "scan_low_value"):
       continue
+    if out.doc_id in seen_doc_ids:
+      continue
+    seen_doc_ids.add(out.doc_id)
     jsonl_path = parsed_dir / f"{out.doc_id}.jsonl"
     if not jsonl_path.exists():
       continue
+    doc_chunk_ids: list[str] = []
     with jsonl_path.open(encoding="utf-8") as f:
       for line in f:
         if line.strip():
           record = json.loads(line)
-          all_chunk_ids.append(record["chunk_id"])
+          doc_chunk_ids.append(record["chunk_id"])
+    if len(doc_chunk_ids) != len(set(doc_chunk_ids)):
+      docs_with_internal_dupes.append(out.file_name)
+    all_chunk_ids.extend(doc_chunk_ids)
   duplicate_count = len(all_chunk_ids) - len(set(all_chunk_ids))
   print(
     f"\nUnique chunk_ids: {len(all_chunk_ids)} total, "
-    f"{duplicate_count} duplicates"
+    f"{duplicate_count} duplicates "
+    f"({len(seen_doc_ids)} documents)"
   )
+  if docs_with_internal_dupes:
+    raise AssertionError(
+      f"Duplicate chunk_id within document(s): {docs_with_internal_dupes[:10]}"
+    )
   if duplicate_count:
     raise AssertionError(f"Found {duplicate_count} duplicate chunk_ids across corpus")
 
@@ -586,7 +600,21 @@ def main(argv: list[str] | None = None) -> int:
             processing_seconds=0.0,
           )
 
-        all_outputs.append(output)
+        replaced = False
+        for idx, existing in enumerate(all_outputs):
+          if existing.doc_id == output.doc_id:
+            if existing.file_name != output.file_name:
+              logger.warning(
+                "Duplicate content: %s and %s share doc_id %s",
+                existing.file_name,
+                output.file_name,
+                output.doc_id,
+              )
+            all_outputs[idx] = output
+            replaced = True
+            break
+        if not replaced:
+          all_outputs.append(output)
         manifest[output.file_hash] = _manifest_record(output)
 
         if output.meta.status in ("ok", "scan_low_value"):
