@@ -15,15 +15,20 @@ from app.retrieval.embedder import warmup as embedder_warmup
 logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+async def _warmup_embeddings() -> None:
     logger.info("Warming up embedding model...")
     try:
         await asyncio.to_thread(embedder_warmup)
         logger.info("Embedding model ready")
     except Exception:
         logger.exception("Embedding warmup failed; model will load lazily on first query")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    warmup_task = asyncio.create_task(_warmup_embeddings())
     yield
+    warmup_task.cancel()
     close_driver()
 
 

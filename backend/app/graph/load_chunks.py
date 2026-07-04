@@ -42,7 +42,7 @@ SET c.text = row.text,
     c.lang = row.lang
 WITH c, row
 MATCH (p:Publication {doc_id: row.doc_id})
-MERGE (c)-[:part_of]->(p)
+MERGE (c)-[:PART_OF]->(p)
 """
 
 _FETCH_EMBEDDED_IDS = """

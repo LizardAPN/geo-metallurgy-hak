@@ -8,7 +8,8 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8000',
+        // In Docker: backend:8000; on host: localhost:8001 (see docker-compose ports).
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8001',
         changeOrigin: true,
       },
     },

@@ -42,7 +42,9 @@ services:
     ports:
       - "5173:5173"
     environment:
-      VITE_API_URL: http://localhost:8001
+      # Пустой URL → браузер ходит на /api через Vite proxy (работает и с IP VM).
+      VITE_API_URL: ""
+      VITE_PROXY_TARGET: http://backend:8000
       VITE_USE_MOCKS: ${VITE_USE_MOCKS:-0}
     volumes:
       - ./frontend:/app
