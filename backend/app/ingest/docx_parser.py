@@ -12,6 +12,7 @@ from docx.oxml.text.paragraph import CT_P
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
+from app.ingest.authors import fix_file_metadata_author
 from app.ingest.types import Block, DocMeta, ParseResult
 
 _HEADING_RE = re.compile(r"^Heading\s+(\d+)$", re.IGNORECASE)
@@ -119,7 +120,7 @@ def parse_docx(path: Path) -> ParseResult:
   props = document.core_properties
   created = props.created.isoformat() if props.created else None
   doc_meta = DocMeta(
-    file_metadata_author=props.author or None,
+    file_metadata_author=fix_file_metadata_author(props.author),
     created=created,
     pages=None,
   )
