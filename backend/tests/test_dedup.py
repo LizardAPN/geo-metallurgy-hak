@@ -24,6 +24,7 @@ from app.graph.dedup import (
     initials_compatible,
     load_entities_from_file,
     parse_expert_name,
+    parse_llm_answers,
     pick_canon,
     _is_auto_merge,
 )
@@ -213,3 +214,20 @@ def test_cluster_to_dict() -> None:
     data = cluster_to_dict(cluster)
     assert data["canon_id"] == "c"
     assert data["duplicate_ids"] == ["d"]
+
+
+def test_parse_llm_answers_json_fence() -> None:
+    raw = '```json\n{"answers":[{"pair":0,"same":true},{"pair":1,"same":false}]}\n```'
+    assert parse_llm_answers(raw, expected=2) == [True, False]
+
+
+def test_parse_llm_answers_partial_defaults_false() -> None:
+    raw = '{"answers":[{"pair":1,"same":true}]}'
+    assert parse_llm_answers(raw, expected=3) == [False, True, False]
+
+
+def test_parse_llm_answers_empty_raises() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="empty"):
+        parse_llm_answers("   ", expected=1)

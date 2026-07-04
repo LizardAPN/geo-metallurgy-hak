@@ -17,6 +17,7 @@ from neo4j import Driver
 from rapidfuzz import fuzz
 
 from app.config import settings
+from app.extraction.extractor import strip_json_fence
 from app.graph.convert import ENTITY_LABELS
 from app.graph.driver import close_driver, get_driver
 from app.llm import get_llm_client
@@ -35,6 +36,7 @@ COSINE_CANDIDATE = 0.92
 COSINE_AUTO = 0.97
 EMBEDDING_MATRIX_LIMIT = 5000
 LLM_BATCH_SIZE = 30
+LLM_BATCH_RETRIES = 3
 
 LLM_SYSTEM = (
     "Ты эксперт-металлург. Для каждой пары терминов ответь, обозначают ли они "
@@ -380,17 +382,48 @@ def _build_llm_user(pairs: list[tuple[str, str]]) -> str:
     return "Пары терминов:\n" + "\n".join(lines)
 
 
+def parse_llm_answers(raw: str, *, expected: int) -> list[bool]:
+    """Разобрать ответ LLM; неполные ответы дополняются False."""
+    cleaned = strip_json_fence(raw)
+    if not cleaned:
+        raise ValueError("empty LLM response")
+    data = json.loads(cleaned)
+    if not isinstance(data, dict):
+        raise ValueError(f"expected JSON object, got {type(data).__name__}")
+    answers = data.get("answers")
+    if not isinstance(answers, list):
+        raise ValueError("missing or invalid 'answers' array")
+    by_idx: dict[int, bool] = {}
+    for item in answers:
+        if not isinstance(item, dict):
+            continue
+        if "pair" not in item or "same" not in item:
+            continue
+        by_idx[int(item["pair"])] = bool(item["same"])
+    if not by_idx:
+        raise ValueError("no valid entries in 'answers'")
+    return [by_idx.get(i, False) for i in range(expected)]
+
+
 async def _llm_batch(pairs: list[tuple[str, str]]) -> list[bool]:
     user = _build_llm_user(pairs)
     llm = get_llm_client()
-    raw = await llm.complete_json(LLM_SYSTEM, user, temperature=0.0)
-    data = json.loads(raw)
-    answers = data.get("answers", [])
-    by_idx: dict[int, bool] = {}
-    for item in answers:
-        idx = int(item["pair"])
-        by_idx[idx] = bool(item["same"])
-    return [by_idx.get(i, False) for i in range(len(pairs))]
+    last_error: Exception | None = None
+    for attempt in range(1, LLM_BATCH_RETRIES + 1):
+        raw = await llm.complete_json(LLM_SYSTEM, user, temperature=0.0, max_tokens=2000)
+        try:
+            return parse_llm_answers(raw, expected=len(pairs))
+        except (json.JSONDecodeError, ValueError, TypeError) as exc:
+            last_error = exc
+            preview = (raw or "").strip().replace("\n", " ")[:200]
+            logger.warning(
+                "LLM batch parse failed (attempt %d/%d): %s; raw=%r",
+                attempt,
+                LLM_BATCH_RETRIES,
+                exc,
+                preview,
+            )
+    raise RuntimeError(f"LLM batch failed after {LLM_BATCH_RETRIES} attempts") from last_error
 
 
 async def resolve_llm_pairs(
