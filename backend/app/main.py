@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import graph, health, query
+from app.api import documents, graph, health, query
 from app.config import settings
 from app.graph.driver import close_driver
 from app.retrieval.embedder import warmup as embedder_warmup
@@ -40,6 +40,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(query.router, prefix="/api", tags=["query"])
 app.include_router(graph.router, prefix="/api", tags=["graph"])
+app.include_router(documents.router, prefix="/api", tags=["documents"])
 
 
 @app.get("/")
