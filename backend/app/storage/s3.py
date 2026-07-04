@@ -150,6 +150,16 @@ class S3Storage:
     def list_keys(self, prefix: str) -> list[str]:
         return [obj.key for obj in self.list_objects(prefix)]
 
+    def presigned_url(self, key: str, expires: int = 3600) -> str:
+        if not self._available or self._client is None:
+            raise RuntimeError("S3 storage is not available")
+        logger.info("S3 presign: bucket=%s key=%s expires=%d", self.bucket, key, expires)
+        return self._client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self.bucket, "Key": key},
+            ExpiresIn=expires,
+        )
+
     def exists(self, key: str) -> bool:
         if not self._available or self._client is None:
             return False

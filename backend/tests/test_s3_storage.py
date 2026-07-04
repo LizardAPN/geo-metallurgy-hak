@@ -164,6 +164,30 @@ def test_iter_jsonl_mocked(mock_boto_client: MagicMock) -> None:
 
 
 @patch("boto3.client")
+def test_presigned_url_mocked(mock_boto_client: MagicMock) -> None:
+    client = MagicMock()
+    client.generate_presigned_url.return_value = "https://example.com/signed"
+    mock_boto_client.return_value = client
+
+    storage = S3Storage(_configured_s3_settings())
+    key = "raw/ЦМ № 09-2017.pdf"
+    url = storage.presigned_url(key)
+
+    assert url == "https://example.com/signed"
+    client.generate_presigned_url.assert_called_once_with(
+        "get_object",
+        Params={"Bucket": "test-bucket", "Key": key},
+        ExpiresIn=3600,
+    )
+
+
+def test_presigned_url_raises_when_unavailable() -> None:
+    storage = S3Storage(_empty_s3_settings())
+    with pytest.raises(RuntimeError, match="not available"):
+        storage.presigned_url("raw/x.pdf")
+
+
+@patch("boto3.client")
 def test_no_secrets_in_logs(
     mock_boto_client: MagicMock, caplog: pytest.LogCaptureFixture
 ) -> None:

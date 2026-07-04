@@ -122,6 +122,14 @@ class SubgraphResponse(BaseModel):
     mock: bool = False
 
 
+class DocumentLinkResponse(BaseModel):
+    """Ответ GET /api/documents/{doc_id}/link."""
+
+    url: str
+    title: str
+    file_name: str
+
+
 class RetrievedContext(BaseModel):
     """Контракт retrieval → synthesis."""
 
