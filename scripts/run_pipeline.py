@@ -20,34 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 def step_ingest() -> int:
-    """Парсинг и чанкинг документов из data/raw/."""
-    from app.ingest.chunker import write_jsonl
-    from app.ingest.parser import parse_document
-    from app.storage import get_storage
+    """Парсинг и чанкинг документов из S3 / data/raw/."""
+    from app.ingest.run import main
 
-    storage = get_storage()
-    files = list(DATA_RAW.glob("*.pdf")) + list(DATA_RAW.glob("*.docx"))
-    if not files:
-        logger.warning("No PDF/DOCX files in %s — skipping ingest", DATA_RAW)
-        return 0
-
-    for path in files:
-        logger.info("Ingesting %s", path.name)
-        try:
-            chunks = parse_document(path)
-            doc_id = path.stem
-            out_path = DATA_PARSED / f"{doc_id}.jsonl"
-            write_jsonl(chunks, out_path)
-            if storage.available:
-                storage.upload_file(path, f"raw/{path.name}")
-                storage.upload_file(out_path, f"parsed/{doc_id}.jsonl")
-        except NotImplementedError as exc:
-            logger.warning("Ingest not implemented: %s", exc)
-            return 0
-        except Exception as exc:
-            logger.error("Failed to ingest %s: %s", path, exc)
-            return 1
-    return 0
+    return main()
 
 
 def step_extract() -> int:
