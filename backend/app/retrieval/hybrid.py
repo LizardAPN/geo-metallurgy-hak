@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from dataclasses import dataclass
 from typing import Any
 
 from neo4j import READ_ACCESS
@@ -23,6 +25,20 @@ logger = logging.getLogger(__name__)
 
 RRF_K = 60
 NODE_LIMIT = 60
+
+
+@dataclass
+class RetrievalStats:
+    """Сырые метрики ног retrieval (для логов и диагностических скриптов)."""
+
+    vector_hits: int = 0
+    cypher_rows: int = 0
+    vector_ms: int = 0
+    cypher_ms: int = 0
+    cypher: str | None = None
+    cypher_valid: bool = False
+    cypher_explanation: str = ""
+
 
 _CYPHER_SUBGRAPH = """
 UNWIND $names AS item
@@ -169,6 +185,7 @@ async def retrieve(
     query: str,
     filters: dict[str, Any] | None = None,
     top_k: int = 12,
+    stats: RetrievalStats | None = None,
 ) -> tuple[RetrievedContext, str]:
     """
     Гибридный retrieval: vector + optional text2cypher с RRF и деградацией.
@@ -181,16 +198,33 @@ async def retrieve(
     cypher_rows: list[dict[str, Any]] = []
     vector_error: Exception | None = None
     graph_error: Exception | None = None
+    vector_ms = 0
+    cypher_ms = 0
 
     async def _vector() -> list[dict[str, Any]]:
-        return await asyncio.to_thread(
+        nonlocal vector_ms
+        t0 = time.perf_counter()
+        result = await asyncio.to_thread(
             vector_search.search, query, 20, filters
         )
+        vector_ms = int((time.perf_counter() - t0) * 1000)
+        return result
 
     async def _graph() -> list[dict[str, Any]]:
+        nonlocal cypher_ms
         if not settings.feature_graph:
             return []
-        return await text2cypher.retrieve_graph(query, filters)
+        t0 = time.perf_counter()
+        plan = await text2cypher.generate(query, filters)
+        if stats is not None:
+            stats.cypher = plan.cypher
+            stats.cypher_valid = (
+                text2cypher.validate_cypher(plan.cypher) if plan.cypher else False
+            )
+            stats.cypher_explanation = plan.explanation
+        rows = await text2cypher.execute(plan)
+        cypher_ms = int((time.perf_counter() - t0) * 1000)
+        return rows
 
     vector_task = asyncio.create_task(_vector())
     graph_task = asyncio.create_task(_graph())
@@ -206,6 +240,12 @@ async def retrieve(
     except Exception as exc:
         graph_error = exc
         logger.exception("text2cypher failed in hybrid retrieve")
+
+    if stats is not None:
+        stats.vector_hits = len(vector_chunks) if vector_error is None else 0
+        stats.cypher_rows = len(cypher_rows) if graph_error is None else 0
+        stats.vector_ms = vector_ms
+        stats.cypher_ms = cypher_ms
 
     vector_ok = vector_error is None and bool(vector_chunks)
     graph_ok = graph_error is None and bool(cypher_rows)
@@ -248,8 +288,13 @@ async def retrieve(
         edges=graph_subset.edges,
     )
     logger.info(
-        "hybrid retrieve mode=%s chunks=%d facts=%d nodes=%d",
+        "hybrid retrieve mode=%s vector_chunks=%d cypher_rows=%d vector_ms=%d cypher_ms=%d "
+        "chunks=%d facts=%d nodes=%d",
         mode,
+        len(vector_chunks) if vector_error is None else 0,
+        len(cypher_rows) if graph_error is None else 0,
+        vector_ms,
+        cypher_ms,
         len(ctx.chunks),
         len(ctx.cypher_results),
         len(ctx.nodes),

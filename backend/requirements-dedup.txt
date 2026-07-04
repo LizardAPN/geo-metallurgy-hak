@@ -1,0 +1,9 @@
+# Минимум для офлайн dedup на GPU-ВМ (без Neo4j-сервера, без ingest/extract).
+numpy>=1.26.0,<2.0.0
+rapidfuzz>=3.9.0
+FlagEmbedding>=1.2.0
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+openai>=1.55.0
+tqdm>=4.66.0
+httpx>=0.28.0
