@@ -1,36 +1,45 @@
-"""Парсинг PDF/DOCX в текст и метаданные."""
+"""Парсинг PDF/DOCX в текст и структурные блоки."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
-from app.schemas.ontology import ParsedChunk
+from app.ingest.docx_parser import parse_docx
+from app.ingest.noise import is_noise
+from app.ingest.pdf_parser import parse_pdf
+from app.ingest.sections import assign_sections
+from app.ingest.types import Block, ParseResult
 
 logger = logging.getLogger(__name__)
 
 
-def parse_document(path: Path) -> list[ParsedChunk]:
-    """
-    Разобрать PDF или DOCX документ в список ParsedChunk.
+def parse_file(path: Path) -> tuple[ParseResult, int, list[str]]:
+  """
+  Разобрать PDF или DOCX.
 
-    Использует PyMuPDF для PDF и python-docx для DOCX.
-    Каждый элемент содержит текст страницы/секции и метаданные документа.
+  Returns:
+    (ParseResult, noise_blocks_dropped, reference_texts)
+  """
+  suffix = path.suffix.lower()
+  if suffix == ".pdf":
+    result = parse_pdf(path)
+  elif suffix == ".docx":
+    result = parse_docx(path)
+  else:
+    raise ValueError(f"Unsupported format: {suffix}")
 
-    Args:
-        path: Путь к файлу в data/raw/
+  filtered: list[Block] = []
+  noise_dropped = 0
+  for block in result.blocks:
+    if block.type == "table":
+      filtered.append(block)
+      continue
+    if is_noise(block.text):
+      noise_dropped += 1
+      continue
+    filtered.append(block)
 
-    Returns:
-        Список ParsedChunk (по одному на страницу/секцию до чанкинга).
-
-    Raises:
-        NotImplementedError: Реализация — владелец Mid 2.
-        ValueError: Неподдерживаемый формат файла.
-    """
-    logger.info("parse_document called for %s", path)
-    suffix = path.suffix.lower()
-    if suffix not in {".pdf", ".docx"}:
-        raise ValueError(f"Unsupported format: {suffix}")
-    raise NotImplementedError(
-        "parse_document: implement PDF/DOCX parsing with PyMuPDF and python-docx"
-    )
+  filtered, reference_texts = assign_sections(filtered)
+  result.blocks = filtered
+  return result, noise_dropped, reference_texts
