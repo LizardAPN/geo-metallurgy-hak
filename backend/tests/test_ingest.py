@@ -10,6 +10,7 @@ from docx import Document
 from app.ingest.authors import extract_author_hint, fix_file_metadata_author
 from app.ingest.chunker import (
   MIN_TEXT_CHUNK,
+  PRESENTATION_SLIDE_MAX,
   _coalesce_blocks,
   _dedupe_repeated_lines,
   _merge_small_text_chunks,
@@ -384,4 +385,37 @@ def test_parse_pptx_slides(tmp_path: Path) -> None:
   parsed, noise, refs = parse_file(path)
   assert noise >= 0
   assert not refs
+
+  chunks = blocks_to_chunks(
+    parsed.blocks,
+    doc_id="doc_pptx",
+    file_name="sample.pptx",
+    source_key="raw/sample.pptx",
+    presentation=True,
+  )
+  text_chunks = [c for c in chunks if c.kind == "text"]
+  assert len(text_chunks) == 2
+  assert all(c.page in (1, 2) for c in text_chunks)
+
+
+def test_presentation_chunk_split_at_2000() -> None:
+  long_a = "A" * 1200
+  long_b = "B" * 1200
+  blocks = [
+    Block(type="heading", text="Заголовок", page=1, section="s1"),
+    Block(type="paragraph", text=long_a, page=1, section="s1"),
+    Block(type="paragraph", text=long_b, page=1, section="s1"),
+  ]
+  chunks = blocks_to_chunks(
+    blocks,
+    doc_id="doc_split",
+    file_name="big.pptx",
+    source_key="raw/big.pptx",
+    presentation=True,
+  )
+  text_chunks = [c for c in chunks if c.kind == "text"]
+  assert len(text_chunks) == 3
+  assert all(len(c.text) >= PRESENTATION_SLIDE_MAX // 2 for c in text_chunks[1:])
+  merged_len = len(long_a) + len(long_b) + len("Заголовок") + 2
+  assert merged_len > PRESENTATION_SLIDE_MAX
 
