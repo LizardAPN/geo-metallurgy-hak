@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -23,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 EMBEDDINGS_DIR = REPO_ROOT / "data" / "embeddings"
 
 _model = None
+_model_lock = threading.Lock()
 
 
 def _text_hash(text: str) -> str:
@@ -32,19 +34,26 @@ def _text_hash(text: str) -> str:
 def _get_model():
     global _model
     if _model is None:
-        from FlagEmbedding import BGEM3FlagModel
+        with _model_lock:
+            if _model is None:
+                from FlagEmbedding import BGEM3FlagModel
 
-        logger.info(
-            "Loading embedding model %s on %s",
-            settings.embedding_model,
-            settings.embed_device,
-        )
-        _model = BGEM3FlagModel(
-            settings.embedding_model,
-            use_fp16=False,
-            device=settings.embed_device,
-        )
+                logger.info(
+                    "Loading embedding model %s on %s",
+                    settings.embedding_model,
+                    settings.embed_device,
+                )
+                _model = BGEM3FlagModel(
+                    settings.embedding_model,
+                    use_fp16=False,
+                    device=settings.embed_device,
+                )
     return _model
+
+
+def warmup() -> None:
+    """Прогреть process-level синглтон модели (вызывать на старте FastAPI/скрипта)."""
+    embed_query("warmup")
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
@@ -169,11 +178,17 @@ def load_or_compute_embeddings(
             cached_vectors[chunk.chunk_id] = vec
 
     ordered_ids = [c.chunk_id for c in chunks]
-    matrix = np.array(
-        [cached_vectors[cid] for cid in ordered_ids],
-        dtype=np.float32,
-    )
-    _save_cache_atomic(doc_id, ordered_ids, [hash_by_id[cid] for cid in ordered_ids], matrix)
     computed = len(to_compute)
     cached = len(chunks) - computed
+
+    if computed > 0:
+        matrix = np.array(
+            [cached_vectors[cid] for cid in ordered_ids],
+            dtype=np.float32,
+        )
+        _save_cache_atomic(doc_id, ordered_ids, [hash_by_id[cid] for cid in ordered_ids], matrix)
+        logger.info("Embeddings for %s: computed=%d cached=%d", doc_id, computed, cached)
+    else:
+        logger.info("Embeddings for %s: cached=%d (disk cache hit, no recompute)", doc_id, cached)
+
     return {cid: cached_vectors[cid] for cid in ordered_ids}, computed, cached

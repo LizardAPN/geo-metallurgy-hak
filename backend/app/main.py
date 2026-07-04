@@ -1,12 +1,33 @@
 """FastAPI application entry point."""
 
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import graph, health, query
 from app.config import settings
+from app.graph.driver import close_driver
+from app.retrieval.embedder import warmup as embedder_warmup
 
-app = FastAPI(title="Научный клубок", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Warming up embedding model...")
+    try:
+        await asyncio.to_thread(embedder_warmup)
+        logger.info("Embedding model ready")
+    except Exception:
+        logger.exception("Embedding warmup failed; model will load lazily on first query")
+    yield
+    close_driver()
+
+
+app = FastAPI(title="Научный клубок", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

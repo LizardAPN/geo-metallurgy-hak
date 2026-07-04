@@ -113,7 +113,9 @@ def load_document(
     if not chunks:
         return 0, 0, 0
 
-    embeddings, _, _ = load_or_compute_embeddings(doc_id, chunks)
+    embeddings, computed, cached = load_or_compute_embeddings(doc_id, chunks)
+    if computed == 0:
+        logger.info("%s: embeddings from disk cache, no recompute (cached=%d)", doc_id, cached)
     driver = get_driver()
 
     loaded = 0
