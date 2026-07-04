@@ -2,7 +2,7 @@
 
 Граф знаний + гибридный GraphRAG-поиск по R&D-корпусу горно-металлургической отрасли.
 
-[Живое демо](http://111.88.148.105:5173/) · [Видео](https://drive.google.com/file/d/1iojarbHAyUzs98eUNC7t95rPfjfi2V2S/view?usp=sharing) · [Презентация](docs/presentation.pdf)
+[Живое демо](http://111.88.148.105:5173/) · [Видео](https://drive.google.com/file/d/1iojarbHAyUzs98eUNC7t95rPfjfi2V2S/view?usp=sharing) · [Презентация](https://drive.google.com/file/d/1jpwy0Mb1yAzVAJvVbU-88SoXjYeaGdMW/view?usp=sharing)
 
 ## Попробовать за 30 секунд
 
